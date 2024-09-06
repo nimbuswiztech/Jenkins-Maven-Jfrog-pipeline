@@ -1,0 +1,43 @@
+pipeline {
+    agent any
+    environment {
+        PATH = "$PATH:/usr/share/maven/bin"
+        ARTIFACTORY_URL = 'http://35.170.191.101:8081/artifactory/'
+        ARTIFACTORY_REPO = 'New-repo'
+    }
+    stages {
+        stage('GetCode') {
+            steps {
+                git branch: 'main', changelog: false, poll: false, url: 'https://github.com/nimbuswiztech/maven_webapp.git'
+            }
+        }        
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        stage('Push to Artifactory') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'artifactory-credentials-id', usernameVariable: 'ARTIFACTORY_USER', passwordVariable: 'ARTIFACTORY_PASSWORD')]) {
+                    script {
+                        def server = Artifactory.server('artifactory-server')
+                        def uploadSpec = """{
+                            "files": [{
+                                "pattern": "target/*.war",
+                                "target": "${ARTIFACTORY_REPO}"
+                            }]
+                        }"""
+                        server.upload(uploadSpec)
+                    }
+                }
+            }
+        }
+        stage('Deploy') {
+            steps {
+                sshagent(['Tomacat-m1']) {
+                    sh "scp -o StrictHostKeyChecking=no target/demo.war ubuntu@34.205.156.250:/opt/tomcat/webapps"
+                }
+            }
+        }
+    }
+}
