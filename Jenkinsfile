@@ -1,7 +1,7 @@
 pipeline{
     agent any
-    environment {
-        PATH = "$PATH:/usr/share/maven/bin"
+    tools{
+        maven 'maven3'
     }
     stages{
        stage('GetCode'){
@@ -13,12 +13,14 @@ pipeline{
             steps{
                 sh 'mvn clean package'
             }
-        }
-       stage('deploy'){
-            steps{
-                sshagent(['Tomcat-demo']) {
-                    sh "scp -o StrictHostKeyChecking=no target/demo.war ubuntu@54.90.214.50:/var/lib/tomcat9/webapps"
-
+         }
+        stage('SonarQube analysis') {
+//    def scannerHome = tool 'SonarScanner 4.0';
+        steps{
+        withSonarQubeEnv('sonarserver') { 
+        // If you have configured more than one global server connection, you can specify its name
+//      sh "${scannerHome}/bin/sonar-scanner"
+        sh "mvn sonar:sonar"
                 }
             }
         }
