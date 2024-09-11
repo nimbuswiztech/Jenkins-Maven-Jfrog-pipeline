@@ -1,0 +1,53 @@
+pipeline {
+    agent any
+    environment {
+        PATH = "$PATH:/usr/share/maven/bin"
+        ARTIFACTORY_URL = 'http://184.73.121.70:8081/artifactory/'
+        ARTIFACTORY_REPO = 'new-repo'
+    }
+    stages {
+        stage('GetCode') {
+            steps {
+                git branch: 'main', changelog: false, poll: false, url: 'https://github.com/nimbuswiztech/maven_webapp.git'
+            }
+        }        
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        stage('SonarQube analysis') {
+//    def scannerHome = tool 'SonarScanner 4.0';
+        steps{
+        withSonarQubeEnv('sonarserver') { 
+        // If you have configured more than one global server connection, you can specify its name
+//      sh "${scannerHome}/bin/sonar-scanner"
+        sh "mvn sonar:sonar"
+                }
+            }
+        }
+        stage('Push to Artifactory') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'artifactory-credentials-id', usernameVariable: 'ARTIFACTORY_USER', passwordVariable: 'ARTIFACTORY_PASSWORD')]) {
+                    script {
+                        def server = Artifactory.server('artifactory-server')
+                        def uploadSpec = """{
+                            "files": [{
+                                "pattern": "target/*.war",
+                                "target": "${ARTIFACTORY_REPO}"
+                            }]
+                        }"""
+                        server.upload(uploadSpec)
+                    }
+                }
+            }
+        }
+        stage('Deploy') {
+            steps {
+                sshagent(['Tomacat-m1']) {
+                    sh "scp -o StrictHostKeyChecking=no target/demo.war ubuntu@54.242.199.102:/opt/tomcat/webapps"
+                }
+            }
+        }
+    }
+}
